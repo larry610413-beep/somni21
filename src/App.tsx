@@ -17,7 +17,13 @@ import {
   Clock, 
   Volume2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Maximize,
+  Copy,
+  Languages,
+  Target,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateTTS } from './services/gemini';
@@ -71,6 +77,11 @@ export default function App() {
   const [isPlayingQueue, setIsPlayingQueue] = useState(false);
   const [playlistQueue, setPlaylistQueue] = useState<AlarmRecord[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
+  const [playbackDuration, setPlaybackDuration] = useState(0);
+  const [menuData, setMenuData] = useState<{ text: string; x: number; y: number } | null>(null);
 
   // Refs
   const mainPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -79,6 +90,7 @@ export default function App() {
   const wakeLockRef = useRef<any>(null);
   const fadeIntervalRef = useRef<any>(null);
   const autoCloseTimerRef = useRef<any>(null);
+  const loopTimerRef = useRef<any>(null);
   const isUserScrollingRef = useRef(false);
 
   // Persistence
@@ -93,6 +105,57 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('gemini_api_key', apiKey);
   }, [apiKey]);
+
+  // Fullscreen Sync
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    
+    // Forced Fullscreen on any click
+    const forceFs = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
+    document.addEventListener('click', forceFs);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('click', forceFs);
+    };
+  }, []);
+
+  // Sync Audio State
+  useEffect(() => {
+    const audio = mainPlayerRef.current;
+    if (!audio) return;
+
+    const handlePlay = () => setIsPaused(false);
+    const handlePause = () => setIsPaused(true);
+    const handleLoadedMetadata = () => {
+      if (audio) setPlaybackDuration(audio.duration);
+    };
+    
+    let rafId: number;
+    const updateTime = () => {
+      if (audio && !audio.paused) {
+        setCurrentPlaybackTime(audio.currentTime);
+      }
+      rafId = requestAnimationFrame(updateTime);
+    };
+
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    rafId = requestAnimationFrame(updateTime);
+
+    return () => {
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   // Clock & Alarm Checker
   useEffect(() => {
@@ -132,6 +195,19 @@ export default function App() {
     };
   }, []);
 
+  // Mobile Address Bar & Zoom Prevention
+  useEffect(() => {
+    // Hide address bar on mobile
+    window.scrollTo(0, 1);
+    
+    // Prevent zooming on double tap
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+    document.addEventListener('touchstart', preventZoom, { passive: false });
+    return () => document.removeEventListener('touchstart', preventZoom);
+  }, []);
+
   // Wake Lock
   useEffect(() => {
     const requestWakeLock = async () => {
@@ -157,6 +233,10 @@ export default function App() {
     }
     if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
     if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
+    setIsPaused(false);
+    setCurrentPlaybackTime(0);
+    setPlaybackDuration(0);
 
     if (!fromQueue) {
       setPlaylistQueue([]);
@@ -196,12 +276,16 @@ export default function App() {
       
       audio.onended = () => {
         repeatCount++;
-        if (repeatCount < (record.repeats || 1)) {
-          setTimeout(playLoop, (record.interval || 5) * 1000);
+        const maxRepeats = record.repeats || 1;
+        
+        if (repeatCount < maxRepeats) {
+          loopTimerRef.current = setTimeout(playLoop, (record.interval || 5) * 1000);
         } else {
-          if (fromQueue && playlistQueue.length > 0) {
-            // This is handled by a separate queue effect or callback
+          if (fromQueue) {
+            // Immediately clear active ID to trigger the next one in queue
+            setActivePlaybackId(null);
           } else {
+            // Single play: keep text visible for 10s then close
             autoCloseTimerRef.current = setTimeout(() => {
               setActivePlaybackId(null);
             }, 10000);
@@ -220,9 +304,13 @@ export default function App() {
     }
     if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
     if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
     setActivePlaybackId(null);
     setIsPlayingQueue(false);
     setPlaylistQueue([]);
+    setIsPaused(false);
+    setCurrentPlaybackTime(0);
+    setPlaybackDuration(0);
   };
 
   const togglePlay = (record: AlarmRecord) => {
@@ -255,7 +343,8 @@ export default function App() {
         enabled: false,
         volume: 0.3,
         repeats: 3,
-        interval: 5
+        interval: 5,
+        locked: true
       };
 
       setRecords(prev => [newRecord, ...prev]);
@@ -277,6 +366,18 @@ export default function App() {
     setIsPlayingQueue(true);
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        alert(`無法進入全螢幕: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
   // Queue Effect
   useEffect(() => {
     if (isPlayingQueue && !activePlaybackId && playlistQueue.length > 0) {
@@ -294,6 +395,76 @@ export default function App() {
   const activeRecord = useMemo(() => {
     return records.find(r => r.id === activePlaybackId);
   }, [records, activePlaybackId]);
+
+  const lineRanges = useMemo(() => {
+    if (!activeRecord) return [];
+    const lines = activeRecord.text.split('\n');
+    let charCount = 0;
+    let weightedCharCount = 0;
+    const PAUSE_WEIGHT = 6; // Adjusted for better sync with gemini.ts pauses
+
+    return lines.map(line => {
+      const start = charCount;
+      const weightedStart = weightedCharCount;
+      
+      charCount += line.length + 1;
+      
+      // Calculate how many pauses are in this line (based on gemini.ts processing)
+      const sentenceEndings = (line.match(/[。！？!?]/g) || []).length;
+      const lineWeight = line.length + (sentenceEndings * PAUSE_WEIGHT) + PAUSE_WEIGHT;
+      
+      weightedCharCount += lineWeight;
+      
+      return { 
+        start, 
+        end: charCount, 
+        weightedStart, 
+        weightedEnd: weightedCharCount 
+      };
+    });
+  }, [activeRecord]);
+
+  const currentPos = useMemo(() => {
+    if (!activeRecord || !playbackDuration || !lineRanges.length) return 0;
+    
+    const totalWeightedChars = lineRanges[lineRanges.length - 1].weightedEnd;
+    const currentWeightedPos = (currentPlaybackTime / playbackDuration) * totalWeightedChars;
+    
+    // Find the line that contains this weighted position
+    const line = lineRanges.find(r => currentWeightedPos >= r.weightedStart && currentWeightedPos <= r.weightedEnd) || lineRanges[lineRanges.length - 1];
+    if (!line) return 0;
+    
+    // Interpolate within the line
+    const lineWeight = line.weightedEnd - line.weightedStart;
+    const lineTextLen = line.end - line.start;
+    const lineProgress = (currentWeightedPos - line.weightedStart) / lineWeight;
+    
+    // Map weighted progress back to actual text progress
+    // The text comes first, then the pauses.
+    const textRatio = lineTextLen / lineWeight;
+    const actualProgress = Math.min(1, lineProgress / textRatio);
+    
+    return line.start + (actualProgress * lineTextLen);
+  }, [currentPlaybackTime, activeRecord, lineRanges, playbackDuration]);
+
+  const currentLineIndex = useMemo(() => {
+    if (!lineRanges.length) return -1;
+    return lineRanges.findIndex(range => currentPos >= range.start && currentPos < range.end);
+  }, [lineRanges, currentPos]);
+
+  // Auto-scroll to active line
+  useEffect(() => {
+    if (activePlaybackId && !isUserScrollingRef.current && currentLineIndex !== -1) {
+      // Use a small timeout to ensure the DOM has updated the .active-line class
+      const timer = setTimeout(() => {
+        const activeEl = textScrollRef.current?.querySelector('.active-line');
+        if (activeEl) {
+          activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentLineIndex, activePlaybackId]);
 
   return (
     <div className="min-h-screen bg-black text-white font-light overflow-x-hidden">
@@ -370,7 +541,7 @@ export default function App() {
                 <div className="p-1.5 bg-white/5 border-t border-white/10 flex items-center justify-between gap-1.5 shrink-0">
                   <button 
                     onClick={handleAllPlay}
-                    className="px-2 py-1.5 bg-indigo-600/20 rounded-lg border border-indigo-500/30 text-[12px] font-bold text-indigo-300 min-w-[60px] text-center flex items-center justify-center gap-1 hover:bg-indigo-600 hover:text-white transition-colors"
+                    className="px-2 py-1.5 bg-orange-600/20 rounded-lg border border-orange-500/30 text-[12px] font-bold text-orange-300 min-w-[60px] text-center flex items-center justify-center gap-1 hover:bg-orange-600 hover:text-white transition-colors"
                   >
                     <Play className="w-3 h-3" /> All
                   </button>
@@ -409,30 +580,153 @@ export default function App() {
                   <X className="w-5 h-5" />
                 </button>
 
-                <div 
-                  ref={textScrollRef}
-                  className="flex-1 py-16 px-6 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-white/20"
-                  onScroll={() => {
-                    isUserScrollingRef.current = true;
-                    setTimeout(() => { isUserScrollingRef.current = false; }, 3000);
-                  }}
-                >
-                  <h2 className="text-[17px] font-normal leading-relaxed text-left whitespace-pre-wrap break-words select-text">
-                    {activeRecord?.text.replace(/ \.\.\. /g, '。')}
-                  </h2>
+                {/* Background Play/Pause Status Icon */}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-0 opacity-40 pointer-events-none w-[44px] h-[44px] flex items-center justify-center">
+                  {isPaused ? (
+                    <Play className="w-[20px] h-[20px] text-white" />
+                  ) : (
+                    <Pause className="w-[20px] h-[20px] text-white" />
+                  )}
                 </div>
 
-                <div className="absolute bottom-4 right-4 z-50">
-                  <button 
-                    onClick={() => {
-                      if(mainPlayerRef.current) {
-                        if(mainPlayerRef.current.paused) mainPlayerRef.current.play();
+                <div 
+                  ref={textScrollRef}
+                  className="flex-1 py-16 pl-3 pr-6 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-white/20 relative cursor-pointer"
+                  onScroll={() => {
+                    isUserScrollingRef.current = true;
+                    setTimeout(() => { isUserScrollingRef.current = false; }, 10000);
+                  }}
+                  onClick={(e) => {
+                    if (isPaused) {
+                      const selection = window.getSelection()?.toString();
+                      if (selection) {
+                        setMenuData({ text: selection, x: e.clientX, y: e.clientY });
+                        return;
+                      }
+                    }
+                    setMenuData(null);
+
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    if (x < rect.width / 2) {
+                      // Left: Rewind 3s
+                      if (mainPlayerRef.current) {
+                        mainPlayerRef.current.currentTime = Math.max(0, mainPlayerRef.current.currentTime - 3);
+                      }
+                    } else {
+                      // Right: Toggle Play/Pause
+                      if (mainPlayerRef.current) {
+                        if (mainPlayerRef.current.paused) mainPlayerRef.current.play();
                         else mainPlayerRef.current.pause();
                       }
+                    }
+                  }}
+                >
+                  <div className="text-[21px] landscape:text-[25px] font-normal leading-relaxed text-left whitespace-pre-wrap break-words select-text">
+                    {activeRecord?.text.split('\n').map((line, i) => {
+                      const match = line.match(/^([^:：]+)[:：]\s*(.*)$/);
+                      const range = lineRanges[i];
+                      const isActive = currentPos >= range?.start && currentPos < range?.end;
+
+                      if (match) {
+                        const name = match[1].trim();
+                        const content = match[2].trim().replace(/ \.\.\. /g, '。');
+                        return (
+                          <div key={i} className={`mb-8 last:mb-0 ${isActive ? 'active-line' : ''}`}>
+                            <div className="font-normal text-gray-400/90 mb-1">{name}:</div>
+                            <div className={`relative inline-block transition-all duration-300 text-white/90`}>
+                              {content}
+                              {isActive && (
+                                <motion.div 
+                                  layoutId="underline"
+                                  className="absolute -bottom-1 left-0 h-0.5 bg-blue-700 w-full rounded-full"
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return line.trim() ? (
+                        <div key={i} className={`mb-6 last:mb-0 relative inline-block transition-all duration-300 text-white/90 ${isActive ? 'active-line' : ''}`}>
+                          {line.replace(/ \.\.\. /g, '。')}
+                          {isActive && (
+                            <motion.div 
+                              layoutId="underline"
+                              className="absolute -bottom-1 left-0 h-0.5 bg-blue-700 w-full rounded-full"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                            />
+                          )}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+
+                  {/* Pause Menu */}
+                  <AnimatePresence>
+                    {menuData && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                        style={{ left: Math.min(window.innerWidth - 160, Math.max(10, menuData.x - 80)), top: menuData.y - 60 }}
+                        className="fixed z-[100] bg-black/90 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl flex items-center gap-1 p-1"
+                      >
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`https://translate.google.com/?sl=auto&tl=zh-TW&text=${encodeURIComponent(menuData.text)}&op=translate`, '_blank');
+                            setMenuData(null);
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-lg text-white/80 flex flex-col items-center gap-0.5"
+                        >
+                          <Languages className="w-4 h-4" />
+                          <span className="text-[9px]">翻譯</span>
+                        </button>
+                        <div className="w-px h-6 bg-white/10 mx-0.5" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(menuData.text);
+                            setMenuData(null);
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-lg text-white/80 flex flex-col items-center gap-0.5"
+                        >
+                          <Copy className="w-4 h-4" />
+                          <span className="text-[9px]">複製</span>
+                        </button>
+                        <div className="w-px h-6 bg-white/10 mx-0.5" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const utterance = new SpeechSynthesisUtterance(menuData.text);
+                            window.speechSynthesis.speak(utterance);
+                            setMenuData(null);
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-lg text-white/80 flex flex-col items-center gap-0.5"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          <span className="text-[9px]">發音</span>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="absolute bottom-2 right-2 z-50 flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      const activeEl = textScrollRef.current?.querySelector('.active-line');
+                      if (activeEl) {
+                        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
                     }}
-                    className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20"
+                    className="w-[44px] h-[44px] flex items-center justify-center bg-transparent rounded-full hover:bg-white/10 active:scale-95 transition-all"
+                    title="定位目前播放位置"
                   >
-                    {mainPlayerRef.current?.paused ? <Play className="w-6 h-6 fill-white" /> : <Pause className="w-6 h-6 fill-white" />}
+                    <Target className="w-[20px] h-[20px] text-white/80" />
                   </button>
                 </div>
               </motion.div>
@@ -538,12 +832,19 @@ export default function App() {
                       max="1" 
                       step="0.01" 
                       value={r.volume} 
+                      disabled={r.locked}
                       onChange={(e) => setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, volume: parseFloat(e.target.value) } : rec))}
-                      className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white" 
+                      className={`flex-1 h-1 bg-white/10 rounded-lg appearance-none accent-white ${r.locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`} 
                     />
                   </div>
-                  <div className="flex justify-between text-[8px] font-bold text-white/50 px-1 font-mono tracking-tighter">
-                    <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+                  <div className="flex justify-between items-center text-[8px] font-bold text-white/50 px-1 font-mono tracking-tighter">
+                    <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span>
+                    <button 
+                      onClick={() => setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, locked: !rec.locked } : rec))}
+                      className={`ml-1 transition-colors ${r.locked ? 'text-amber-500' : 'text-white/30 hover:text-white/60'}`}
+                    >
+                      {r.locked ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -569,7 +870,7 @@ export default function App() {
             onClick={() => setIsNightMode(true)}
             className="px-4 py-1.5 rounded-xl border bg-[#1a1a1a] border-white/5 text-white/60 hover:text-white text-xs font-bold flex items-center gap-1"
           >
-            <Moon className="w-3 h-3" /> 夜間
+            <Moon className="w-3 h-3 text-amber-400" /> 夜間
           </button>
         </div>
 

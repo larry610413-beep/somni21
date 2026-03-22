@@ -8,6 +8,7 @@ export interface AlarmRecord {
   volume: number;
   repeats: number;
   interval: number;
+  locked?: boolean;
 }
 
 export interface AppState {
