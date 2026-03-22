@@ -1,0 +1,5 @@
+{
+  "name": "AI 語音定時播報器",
+  "description": "結合 Google Gemini AI 語音技術的定時播報工具，支援多種語音、夜間模式與定時播放功能。",
+  "requestFramePermissions": []
+}
