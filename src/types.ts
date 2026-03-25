@@ -1,7 +1,8 @@
 export interface AlarmRecord {
   id: string;
   text: string;
-  audioBase64: string;
+  audioBase64?: string; // Deprecated, use audioId
+  audioId?: string;
   durationSec: number;
   time: string; // HHmm
   enabled: boolean;
