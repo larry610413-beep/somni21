@@ -32,19 +32,19 @@ export default defineConfig(({ mode }) => {
           start_url: '/somni21/',
           icons: [
             {
-              src: 'https://picsum.photos/seed/alarm/192/192.png',
+              src: '/somni21/app-icon.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'https://picsum.photos/seed/alarm/512/512.png',
+              src: '/somni21/app-icon.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'https://picsum.photos/seed/alarm/512/512.png',
+              src: '/somni21/app-icon.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable'
