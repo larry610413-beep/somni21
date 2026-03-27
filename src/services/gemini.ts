@@ -48,15 +48,16 @@ export async function generateTTS(text: string, apiKey: string, isSelection: boo
   
   // 更嚴格的分段處理
   const MAX_CHUNK_SIZE = 400;
-  const chunks: string[] = [];
+  const chunks: { text: string; isParagraphEnd: boolean }[] = [];
   
   // 先按段落切分
   const paragraphs = text.split('\n');
   for (const p of paragraphs) {
     if (!p.trim()) continue;
     
+    const startIndex = chunks.length;
     if (p.length <= MAX_CHUNK_SIZE) {
-      chunks.push(p);
+      chunks.push({ text: p, isParagraphEnd: true });
     } else {
       // 段落太長，按句子切分
       const sentences = p.split(/([。！？])/);
@@ -64,7 +65,7 @@ export async function generateTTS(text: string, apiKey: string, isSelection: boo
       for (let i = 0; i < sentences.length; i++) {
         const s = sentences[i];
         if ((currentChunk + s).length > MAX_CHUNK_SIZE && currentChunk) {
-          chunks.push(currentChunk);
+          chunks.push({ text: currentChunk, isParagraphEnd: false });
           currentChunk = "";
         }
         currentChunk += s;
@@ -73,25 +74,33 @@ export async function generateTTS(text: string, apiKey: string, isSelection: boo
         // 如果句子還是太長，強制按字數切分
         if (currentChunk.length > MAX_CHUNK_SIZE) {
           for (let i = 0; i < currentChunk.length; i += MAX_CHUNK_SIZE) {
-            chunks.push(currentChunk.substring(i, i + MAX_CHUNK_SIZE));
+            chunks.push({ text: currentChunk.substring(i, i + MAX_CHUNK_SIZE), isParagraphEnd: false });
           }
         } else {
-          chunks.push(currentChunk);
+          chunks.push({ text: currentChunk, isParagraphEnd: false });
         }
+      }
+      if (chunks.length > startIndex) {
+        chunks[chunks.length - 1].isParagraphEnd = true;
       }
     }
   }
 
   if (chunks.length === 0 && text.trim()) {
-    chunks.push(text.trim());
+    chunks.push({ text: text.trim(), isParagraphEnd: true });
   }
 
   const audioChunks: Uint8Array[] = [];
   
+  // Generate 2 seconds of silence (24000 sample rate, 16-bit mono = 2 bytes per sample)
+  const silenceBytesLength = 24000 * 2 * 2;
+  const silenceWavData = new Uint8Array(silenceBytesLength); 
+  
   for (let i = 0; i < chunks.length; i++) {
     if (onProgress) onProgress(i + 1, chunks.length);
     
-    const chunkText = chunks[i].trim();
+    const chunkText = chunks[i].text.trim();
+    const isParagraphEnd = chunks[i].isParagraphEnd;
     if (!chunkText) continue;
 
     const speakers = new Set<string>();
@@ -169,7 +178,19 @@ export async function generateTTS(text: string, apiKey: string, isSelection: boo
       for (let j = 0; j < binary.length; j++) {
         bytes[j] = binary.charCodeAt(j);
       }
-      audioChunks.push(bytes);
+      
+      // If it has a RIFF header, strip it so we can safely concatenate raw PCM
+      let pcmBytes = bytes;
+      if (bytes.length > 44 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+        pcmBytes = bytes.slice(44);
+      }
+      
+      audioChunks.push(pcmBytes);
+
+      // 插入段落停頓 (如果不是最後一段，並且標記為段落結尾，且非選取發音模式)
+      if (isParagraphEnd && !isSelection && i < chunks.length - 1) {
+        audioChunks.push(silenceWavData);
+      }
     } catch (err: any) {
       console.error(`Chunk ${i + 1} failed:`, err);
       throw new Error(`第 ${i + 1} 段生成失敗: ${err.message || '未知錯誤'}`);

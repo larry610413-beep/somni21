@@ -623,7 +623,7 @@ export default function App() {
       onDrag={handleDrag}
       onDragEnd={handleDragEnd}
       style={{ y: pullDistance * 0.4 }}
-      className="min-h-screen bg-black text-white font-light overflow-x-hidden relative"
+      className="h-[100dvh] w-full bg-black text-white font-light overflow-hidden relative flex flex-col"
     >
       {/* Pull to Reset Indicator */}
       <div 
@@ -691,10 +691,10 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="w-full max-w-3xl mx-auto px-3 pt-0 pb-16 flex flex-col gap-3 relative">
+      <div className="w-full h-full max-w-3xl mx-auto px-3 pt-3 pb-4 flex flex-col gap-3 relative min-h-0">
         
         {/* 1. Input / Playback Section */}
-        <div className="relative h-[400px] shrink-0">
+        <div className="relative flex-[1.4] landscape:flex-[2.5] min-h-[30vh] shrink-0 flex flex-col">
           <AnimatePresence mode="wait">
             {!activePlaybackId ? (
               <motion.div 
@@ -931,7 +931,7 @@ export default function App() {
         </div>
 
         {/* 2. Alarm List */}
-        <div className="flex flex-col gap-1 w-full pr-1">
+        <div className="flex-1 overflow-y-auto overscroll-contain scroll-smooth flex flex-col gap-2 w-full pr-1 pb-2">
           {sortedRecords.map(r => (
             <div 
               key={r.id} 
