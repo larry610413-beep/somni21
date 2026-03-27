@@ -1051,37 +1051,36 @@ export default function App() {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* 3. Bottom Controls */}
-        <div className="flex gap-1.5 shrink-0 mt-2">
-          <div className="flex-1 flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] rounded-xl border border-white/5">
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={toggleFullscreen}
-                className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center justify-center"
-                title={isFullscreen ? "退出全螢幕" : "全螢幕模式"}
-              >
-                {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-              </button>
-              <div className="flex items-center gap-2 text-[10px] text-green-500/80 tracking-widest font-bold">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>就緒 ({records.filter(r => r.enabled).length}項)</span>
+          {/* 3. Bottom Controls */}
+          <div className="flex gap-1.5 shrink-0 mt-3 pb-6">
+            <div className="flex-1 flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] rounded-xl border border-white/5">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={toggleFullscreen}
+                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center justify-center"
+                  title={isFullscreen ? "退出全螢幕" : "全螢幕模式"}
+                >
+                  {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                </button>
+                <div className="flex items-center gap-2 text-[10px] text-green-500/80 tracking-widest font-bold">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>就緒 ({records.filter(r => r.enabled).length}項)</span>
+                </div>
               </div>
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="px-3 py-1 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+              >
+                <Settings className="w-3 h-3" /> ikey
+              </button>
             </div>
             <button 
-              onClick={() => setShowSettings(true)}
-              className="px-3 py-1 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+              onClick={() => setIsNightMode(true)}
+              className="px-4 py-1.5 rounded-xl border bg-[#1a1a1a] border-white/5 text-white/60 hover:text-white text-xs font-bold flex items-center gap-1"
             >
-              <Settings className="w-3 h-3" /> ikey
+              <Moon className="w-3 h-3 text-amber-400" /> 夜間
             </button>
           </div>
-          <button 
-            onClick={() => setIsNightMode(true)}
-            className="px-4 py-1.5 rounded-xl border bg-[#1a1a1a] border-white/5 text-white/60 hover:text-white text-xs font-bold flex items-center gap-1"
-          >
-            <Moon className="w-3 h-3 text-amber-400" /> 夜間
-          </button>
         </div>
 
       </div>
