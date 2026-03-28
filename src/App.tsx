@@ -694,7 +694,7 @@ export default function App() {
       <div className="w-full h-full max-w-3xl mx-auto px-3 pt-3 pb-4 flex flex-col gap-3 relative overflow-y-auto">
         
         {/* 1. Input / Playback Section */}
-        <div className="relative flex-[1.4] landscape:flex-[2.5] min-h-[45vh] shrink-0 flex flex-col">
+        <div className="relative flex-[1.4] landscape:flex-[2.5] min-h-[60vh] shrink-0 flex flex-col">
           <AnimatePresence mode="wait">
             {!activePlaybackId ? (
               <motion.div 
