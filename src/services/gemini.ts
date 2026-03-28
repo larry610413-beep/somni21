@@ -92,8 +92,8 @@ export async function generateTTS(text: string, apiKey: string, isSelection: boo
 
   const audioChunks: Uint8Array[] = [];
   
-  // Generate 2 seconds of silence (24000 sample rate, 16-bit mono = 2 bytes per sample)
-  const silenceBytesLength = 24000 * 2 * 2;
+  // Generate 4 seconds of silence (24000 sample rate, 16-bit mono = 2 bytes per sample)
+  const silenceBytesLength = 24000 * 4 * 2;
   const silenceWavData = new Uint8Array(silenceBytesLength); 
   
   for (let i = 0; i < chunks.length; i++) {
