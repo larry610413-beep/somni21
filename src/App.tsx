@@ -691,7 +691,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="w-full h-full max-w-3xl mx-auto px-3 pt-3 pb-4 flex flex-col gap-3 relative min-h-0">
+      <div className="w-full h-full max-w-3xl mx-auto px-3 pt-3 pb-4 flex flex-col gap-3 relative overflow-y-auto">
         
         {/* 1. Input / Playback Section */}
         <div className="relative flex-[1.4] landscape:flex-[2.5] min-h-[30vh] shrink-0 flex flex-col">
@@ -931,7 +931,7 @@ export default function App() {
         </div>
 
         {/* 2. Alarm List */}
-        <div className="flex-1 overflow-y-auto overscroll-contain scroll-smooth flex flex-col gap-2 w-full pr-1 pb-2">
+        <div className="flex flex-col gap-2 w-full pr-1 pb-2">
           {sortedRecords.map(r => (
             <div 
               key={r.id} 
